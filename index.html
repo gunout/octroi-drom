@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Dashboard interactif d'analyse des tarifs d'octroi de mer pour les 4 DROM français">
+<meta name="theme-color" content="#0055A4">
+<title>Dashboard Octroi de Mer — DROM</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+:root {
+  --bleu: #0055A4;
+  --bleu-clair: #00A3E0;
+  --bleu-fonce: #003366;
+  --rouge: #EF4135;
+  --rouge-fonce: #C1272D;
+  --blanc: #FFFFFF;
+  --gris-clair: #F5F7FA;
+  --gris: #E1E8ED;
+  --gris-fonce: #2C3E50;
+  --texte: #1A2332;
+  --texte-muted: #6C757D;
+  --ombre: 0 4px 16px rgba(0, 51, 102, 0.08);
+  --ombre-hover: 0 8px 24px rgba(0, 51, 102, 0.15);
+  --radius: 12px;
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+body.dark {
+  --gris-clair: #0D1117;
+  --blanc: #161B22;
+  --gris: #30363D;
+  --texte: #E6EDF3;
+  --texte-muted: #8B949E;
+  --ombre: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --ombre-hover: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: var(--gris-clair);
+  color: var(--texte);
+  line-height: 1.6;
+  transition: var(--transition);
+  min-height: 100vh;
+}
+
+/* Bandeau tricolore */
+.tricolore {
+  position: fixed; top: 0; left: 0; right: 0; height: 4px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; z-index: 9999;
+}
+.tricolore span:nth-child(1) { background: var(--bleu); }
+.tricolore span:nth-child(2) { background: var(--blanc); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05); }
+.tricolore span:nth-child(3) { background: var(--rouge); }
+
+/* Header */
+.header {
+  background: linear-gradient(135deg, var(--bleu-fonce) 0%, var(--bleu) 50%, var(--bleu-clair) 100%);
+  color: white;
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 51, 102, 0.3);
+}
+.header::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 20% 50%, rgba(255,255,255,0.08) 0%, transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(239,65,53,0.15) 0%, transparent 40%);
+  pointer-events: none;
+}
+.header h1 {
+  font-size: clamp(1.6rem, 3.5vw, 2.5rem);
+  font-weight: 800; margin-bottom: 0.6rem;
+  letter-spacing: -0.5px; position: relative;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+.header .flag-icon {
+  display: inline-block; width: 42px; height: 28px;
+  border-radius: 4px; vertical-align: middle;
+  margin-right: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--bleu) 33.33%, white 33.33% 66.66%, var(--rouge) 66.66%);
+}
+.header .subtitle {
+  font-size: 0.95rem; opacity: 0.92;
+  margin-top: 0.5rem; font-weight: 500;
+}
+.header .live-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 0.4rem 1.1rem;
+  border-radius: 20px;
+  font-weight: 700; font-size: 0.75rem;
+  letter-spacing: 1.5px; margin-bottom: 1rem;
+  border: 1px solid rgba(255,255,255,0.3);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+.header .stats-inline {
+  display: flex; justify-content: center;
+  gap: 2rem; margin-top: 1.5rem; flex-wrap: wrap;
+}
+.header .stat-item { text-align: center; }
+.header .stat-value { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+.header .stat-label {
+  font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 1px; opacity: 0.85; margin-top: 0.3rem;
+}
+
+/* Layout */
+.container { max-width: 1600px; margin: 0 auto; padding: 2rem; }
+.section-title {
+  display: flex; align-items: center; gap: 0.8rem;
+  font-size: 1.3rem; font-weight: 800;
+  color: var(--bleu); margin: 2.5rem 0 1.2rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(90deg, var(--bleu) 0%, var(--bleu-clair) 40%, var(--rouge) 100%) 1;
+}
+.section-title .icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px;
+  background: linear-gradient(135deg, var(--bleu), var(--bleu-clair));
+  color: white; border-radius: 10px; font-size: 1.1rem;
+  box-shadow: 0 4px 12px rgba(0, 85, 164, 0.3);
+}
+
+/* KPI Cards */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.2rem; margin-bottom: 2rem;
+}
+.kpi-card {
+  background: var(--blanc);
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--ombre);
+  position: relative; overflow: hidden;
+  transition: var(--transition);
+  border-top: 4px solid var(--bleu);
+}
+.kpi-card::after {
+  content: '';
+  position: absolute; top: 0; right: 0;
+  width: 80px; height: 80px;
+  background: radial-gradient(circle, rgba(0, 85, 164, 0.08), transparent 70%);
+  border-radius: 50%;
+  transform: translate(30%, -30%);
+}
+.kpi-card:hover { transform: translateY(-4px); box-shadow: var(--ombre-hover); }
+.kpi-card.rouge { border-top-color: var(--rouge); }
+.kpi-card.rouge::after { background: radial-gradient(circle, rgba(239, 65, 53, 0.08), transparent 70%); }
+.kpi-card.bleu-clair { border-top-color: var(--bleu-clair); }
+.kpi-label {
+  font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--texte-muted);
+  font-weight: 700; margin-bottom: 0.5rem;
+}
+.kpi-value {
+  font-size: 2.2rem; font-weight: 800;
+  line-height: 1; color: var(--bleu-fonce);
+  margin-bottom: 0.4rem;
+}
+body.dark .kpi-value { color: var(--bleu-clair); }
+.kpi-card.rouge .kpi-value { color: var(--rouge-fonce); }
+body.dark .kpi-card.rouge .kpi-value { color: #FF7B72; }
+.kpi-sub {
+  font-size: 0.85rem; color: var(--texte-muted);
+  display: flex; align-items: center; gap: 0.4rem;
+}
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 0.4rem;
+  border-bottom: 2px solid var(--gris);
+  margin-bottom: 1.5rem;
+  overflow-x: auto; padding-bottom: 0;
+}
+.tab-btn {
+  background: transparent; border: none;
+  padding: 0.9rem 1.4rem;
+  font-size: 0.9rem; font-weight: 700;
+  color: var(--texte-muted);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: var(--transition);
+  border-radius: 8px 8px 0 0;
+  font-family: inherit; white-space: nowrap;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.tab-btn:hover {
+  color: var(--bleu);
+  background: rgba(0, 85, 164, 0.05);
+}
+.tab-btn.active {
+  color: var(--bleu);
+  border-bottom-color: var(--bleu);
+  background: rgba(0, 85, 164, 0.08);
+}
+.tab-panel { display: none; animation: fadeIn 0.3s ease; }
+.tab-panel.active { display: block; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Cards */
+.card {
+  background: var(--blanc);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--ombre);
+  transition: var(--transition);
+}
+.card:hover { box-shadow: var(--ombre-hover); }
+.card-title {
+  font-size: 1rem; font-weight: 700;
+  color: var(--texte); margin-bottom: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 2px solid var(--gris);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.card-title .badge {
+  font-size: 0.7rem; padding: 0.2rem 0.6rem;
+  border-radius: 12px; background: var(--bleu); color: white;
+  font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.chart-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 1.2rem; margin-bottom: 1.2rem;
+}
+.chart-row.full { grid-template-columns: 1fr; }
+@media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
+.chart { width: 100%; height: 400px; }
+.chart.tall { height: 520px; }
+
+/* Search */
+.search-wrapper { position: relative; margin-bottom: 1.5rem; }
+.search-box {
+  width: 100%;
+  padding: 1.1rem 1.3rem 1.1rem 3.2rem;
+  font-size: 1rem;
+  border: 2px solid var(--gris);
+  border-radius: var(--radius);
+  background: var(--blanc);
+  color: var(--texte);
+  font-family: inherit;
+  transition: var(--transition);
+  box-shadow: var(--ombre);
+}
+.search-box:focus {
+  outline: none;
+  border-color: var(--bleu);
+  box-shadow: 0 0 0 4px rgba(0, 85, 164, 0.15);
+}
+.search-icon {
+  position: absolute; left: 1.2rem; top: 50%;
+  transform: translateY(-50%);
+  color: var(--texte-muted);
+  font-size: 1.1rem; pointer-events: none;
+}
+.search-stats {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: 1rem;
+  font-size: 0.85rem; color: var(--texte-muted);
+  flex-wrap: wrap; gap: 0.5rem;
+}
+.search-stats strong { color: var(--bleu); }
+.filter-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.chip {
+  padding: 0.3rem 0.9rem;
+  border-radius: 20px;
+  font-size: 0.8rem; font-weight: 600;
+  cursor: pointer;
+  border: 2px solid var(--gris);
+  background: var(--blanc);
+  color: var(--texte-muted);
+  transition: var(--transition);
+  user-select: none;
+}
+.chip:hover { border-color: var(--bleu-clair); }
+.chip.active {
+  background: var(--bleu); color: white;
+  border-color: var(--bleu);
+}
+.chip.reunion.active { background: #FCD116; color: #1A2332; border-color: #FCD116; }
+.chip.guadeloupe.active { background: var(--bleu); border-color: var(--bleu); }
+.chip.martinique.active { background: var(--rouge); border-color: var(--rouge); }
+.chip.guyane.active { background: #009739; border-color: #009739; }
+
+/* Table */
+.table-wrapper {
+  background: var(--blanc);
+  border-radius: var(--radius);
+  overflow: auto;
+  box-shadow: var(--ombre);
+  max-height: 600px;
+}
+table.data-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 0.85rem;
+}
+table.data-table thead {
+  position: sticky; top: 0;
+  background: linear-gradient(135deg, var(--bleu-fonce), var(--bleu));
+  color: white; z-index: 2;
+}
+table.data-table th {
+  padding: 0.85rem 0.7rem;
+  text-align: left; font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 1px; font-weight: 700;
+}
+table.data-table td {
+  padding: 0.7rem;
+  border-bottom: 1px solid var(--gris);
+}
+table.data-table tbody tr { transition: var(--transition); }
+table.data-table tbody tr:hover { background: rgba(0, 85, 164, 0.05); }
+table.data-table tbody tr:nth-child(even) { background: rgba(0, 51, 102, 0.02); }
+table.data-table tbody tr:nth-child(even):hover { background: rgba(0, 85, 164, 0.08); }
+
+.territory-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 10px;
+  font-size: 0.7rem; font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.territory-GUADELOUPE { background: rgba(0, 85, 164, 0.15); color: var(--bleu); }
+.territory-MARTINIQUE { background: rgba(239, 65, 53, 0.15); color: var(--rouge-fonce); }
+.territory-REUNION { background: rgba(252, 209, 22, 0.25); color: #8B6914; }
+.territory-GUYANE { background: rgba(0, 151, 57, 0.15); color: #006633; }
+body.dark .territory-GUADELOUPE { color: var(--bleu-clair); }
+body.dark .territory-MARTINIQUE { color: #FF7B72; }
+body.dark .territory-REUNION { color: #FCD116; }
+body.dark .territory-GUYANE { color: #3FB950; }
+
+.taux-badge {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.78rem; font-weight: 800;
+  min-width: 52px; text-align: center;
+}
+.taux-0 { background: rgba(108, 117, 125, 0.15); color: var(--texte-muted); }
+.taux-bas { background: rgba(40, 167, 69, 0.15); color: #155724; }
+.taux-moyen { background: rgba(255, 193, 7, 0.2); color: #856404; }
+.taux-haut { background: rgba(239, 65, 53, 0.2); color: var(--rouge-fonce); }
+.taux-tres-haut { background: rgba(193, 39, 45, 0.25); color: #721C24; }
+body.dark .taux-bas { color: #7EE787; }
+body.dark .taux-moyen { color: #FFD700; }
+body.dark .taux-haut { color: #FF7B72; }
+body.dark .taux-tres-haut { color: #FF7B72; }
+
+/* Simulateur */
+.simulator {
+  background: linear-gradient(135deg, var(--blanc) 0%, var(--gris-clair) 100%);
+  border-radius: var(--radius);
+  padding: 2rem;
+  box-shadow: var(--ombre);
+  border-left: 5px solid var(--bleu);
+}
+.sim-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem; margin-bottom: 1.5rem;
+}
+.sim-field label {
+  display: block; font-size: 0.78rem;
+  font-weight: 700; color: var(--texte-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 0.4rem;
+}
+.sim-field input, .sim-field select {
+  width: 100%; padding: 0.7rem 0.9rem;
+  border: 2px solid var(--gris);
+  border-radius: 8px;
+  background: var(--blanc);
+  color: var(--texte);
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: var(--transition);
+}
+.sim-field input:focus, .sim-field select:focus {
+  outline: none; border-color: var(--bleu);
+  box-shadow: 0 0 0 3px rgba(0, 85, 164, 0.15);
+}
+.btn-calc {
+  padding: 0.9rem 2.5rem;
+  background: linear-gradient(135deg, var(--bleu), var(--bleu-clair));
+  color: white; border: none;
+  border-radius: 10px; font-weight: 800;
+  font-size: 1rem; cursor: pointer;
+  transition: var(--transition);
+  box-shadow: 0 4px 16px rgba(0, 85, 164, 0.3);
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  font-family: inherit;
+}
+.btn-calc:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 85, 164, 0.4); }
+.btn-calc:active { transform: translateY(0); }
+.sim-result { margin-top: 1.5rem; display: grid; gap: 0.8rem; }
+.result-row {
+  background: var(--blanc);
+  padding: 1.1rem 1.3rem;
+  border-radius: 10px;
+  border-left: 4px solid var(--bleu);
+  box-shadow: 0 2px 8px rgba(0, 51, 102, 0.06);
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 1rem; align-items: center;
+  transition: var(--transition);
+}
+.result-row:hover { box-shadow: 0 4px 12px rgba(0, 51, 102, 0.12); }
+.result-row.MARTINIQUE { border-left-color: var(--rouge); }
+.result-row.REUNION { border-left-color: #FCD116; }
+.result-row.GUYANE { border-left-color: #009739; }
+.result-info { flex: 1; }
+.result-territory {
+  font-size: 0.7rem; font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--texte-muted);
+  margin-bottom: 0.2rem;
+}
+.result-code {
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  background: var(--gris);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+.result-libelle { font-size: 0.9rem; color: var(--texte); }
+.result-taux {
+  text-align: center; font-size: 0.75rem;
+  color: var(--texte-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.result-taux .value {
+  font-size: 1.4rem; font-weight: 800;
+  color: var(--bleu); display: block;
+}
+.result-montant { text-align: right; min-width: 130px; }
+.result-montant .value {
+  font-size: 1.6rem; font-weight: 800;
+  background: linear-gradient(135deg, var(--bleu), var(--rouge));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text; display: block;
+}
+.result-montant .label {
+  font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--texte-muted);
+}
+
+/* Boutons flottants */
+.floating-actions {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  z-index: 1000;
+  display: flex; flex-direction: column; gap: 0.7rem;
+}
+.action-btn {
+  border: none; border-radius: 50%;
+  width: 54px; height: 54px;
+  font-size: 1.3rem; cursor: pointer;
+  box-shadow: var(--ombre-hover);
+  transition: var(--transition);
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+}
+.action-btn:hover { transform: scale(1.1) rotate(5deg); }
+.action-btn.csv { background: linear-gradient(135deg, var(--bleu), var(--bleu-clair)); }
+.action-btn.json { background: linear-gradient(135deg, var(--rouge), var(--rouge-fonce)); }
+.action-btn.png { background: linear-gradient(135deg, var(--bleu-fonce), var(--bleu)); }
+.action-btn.theme {
+  background: var(--blanc); color: var(--texte);
+  border: 2px solid var(--gris);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 100px; right: 24px;
+  background: var(--bleu);
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  font-weight: 700;
+  opacity: 0; transform: translateY(20px);
+  transition: all 0.3s;
+  z-index: 1001;
+  max-width: 320px;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { background: linear-gradient(135deg, #28a745, #20c997); }
+.toast.warning { background: linear-gradient(135deg, #ffc107, #fd7e14); color: #1A2332; }
+.toast.error { background: linear-gradient(135deg, var(--rouge), var(--rouge-fonce)); }
+
+/* Loading */
+.loading-screen {
+  position: fixed; inset: 0;
+  background: linear-gradient(135deg, var(--bleu-fonce), var(--bleu));
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 9998; color: white;
+  transition: opacity 0.5s;
+}
+.loading-screen.hidden { opacity: 0; pointer-events: none; }
+.spinner {
+  width: 64px; height: 64px;
+  border: 4px solid rgba(255,255,255,0.2);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin-bottom: 1.2rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 1rem; font-weight: 600; opacity: 0.95; }
+.loading-sub { font-size: 0.85rem; opacity: 0.75; margin-top: 0.4rem; }
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 2rem;
+  color: var(--texte-muted);
+  font-size: 0.85rem;
+  border-top: 1px solid var(--gris);
+  margin-top: 3rem;
+}
+.footer .drapeau {
+  display: inline-block;
+  width: 24px; height: 16px;
+  border-radius: 3px;
+  vertical-align: middle;
+  margin: 0 0.3rem;
+  background: linear-gradient(90deg, var(--bleu) 33.33%, white 33.33% 66.66%, var(--rouge) 66.66%);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container { padding: 1rem; }
+  .result-row { grid-template-columns: 1fr; text-align: left; }
+  .result-montant { text-align: left; }
+  .header { padding: 2rem 1rem 1.5rem; }
+  .header .stats-inline { gap: 1rem; }
+  .header .stat-value { font-size: 1.4rem; }
+  .floating-actions { bottom: 16px; right: 16px; gap: 0.4rem; }
+  .action-btn { width: 46px; height: 46px; font-size: 1.1rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="tricolore"><span></span><span></span><span></span></div>
+
+<div class="loading-screen" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">🇫🇷 Chargement des données tarifaires…</div>
+  <div class="loading-sub">38 809 produits · 4 DROM</div>
+</div>
+
+<header class="header">
+  <div class="live-badge">🇫🇷 DONNÉES OFFICIELLES · 2024</div>
+  <h1><span class="flag-icon"></span>Octroi de Mer — DROM</h1>
+  <p class="subtitle">Analyse comparative des tarifs douaniers et simulateur d'octroi de mer</p>
+  <div class="stats-inline" id="header-stats"></div>
+</header>
+
+<main class="container">
+
+  <div class="kpi-grid" id="kpi-grid"></div>
+
+  <nav class="tabs" id="tabs-nav">
+    <button class="tab-btn active" data-tab="overview">📊 Vue d'ensemble</button>
+    <button class="tab-btn" data-tab="comparison">🌍 Comparaison DROM</button>
+    <button class="tab-btn" data-tab="chapters">📚 Chapitres SH</button>
+    <button class="tab-btn" data-tab="search">🔍 Recherche</button>
+    <button class="tab-btn" data-tab="simulator">🧮 Simulateur</button>
+  </nav>
+
+  <!-- TAB OVERVIEW -->
+  <div class="tab-panel active" id="tab-overview">
+    <h2 class="section-title"><span class="icon">📊</span>Vue d'ensemble des 4 DROM</h2>
+    <div class="chart-row">
+      <div class="card">
+        <div class="card-title">Nombre de produits tarifaires <span class="badge">par DROM</span></div>
+        <div class="chart" id="chart-nb"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Taux moyen d'octroi de mer <span class="badge">OME</span></div>
+        <div class="chart" id="chart-moyenne"></div>
+      </div>
+    </div>
+    <div class="chart-row">
+      <div class="card">
+        <div class="card-title">Distribution des taux par territoire</div>
+        <div class="chart tall" id="chart-distribution"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Répartition des produits par DROM</div>
+        <div class="chart tall" id="chart-pie"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB COMPARISON -->
+  <div class="tab-panel" id="tab-comparison">
+    <h2 class="section-title"><span class="icon">🌍</span>Comparaison inter-DROM</h2>
+    <div class="chart-row">
+      <div class="card">
+        <div class="card-title">Taux OME — Distribution comparative</div>
+        <div class="chart" id="chart-comp-ome"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Taux OMRE — Distribution comparative</div>
+        <div class="chart" id="chart-comp-omre"></div>
+      </div>
+    </div>
+    <div class="chart-row full">
+      <div class="card">
+        <div class="card-title">Distribution détaillée (violon + boxplot)</div>
+        <div class="chart tall" id="chart-boxplot"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB CHAPTERS -->
+  <div class="tab-panel" id="tab-chapters">
+    <h2 class="section-title"><span class="icon">📚</span>Analyse par chapitre SH</h2>
+    <div class="chart-row">
+      <div class="card">
+        <div class="card-title">Top 20 chapitres SH <span class="badge">tous DROM</span></div>
+        <div class="chart tall" id="chart-top-chapters"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Taux moyen par chapitre <span class="badge">top 20</span></div>
+        <div class="chart tall" id="chart-chapters-taux"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB SEARCH -->
+  <div class="tab-panel" id="tab-search">
+    <h2 class="section-title"><span class="icon">🔍</span>Recherche de produits</h2>
+    <div class="search-wrapper">
+      <span class="search-icon">🔍</span>
+      <input type="text" class="search-box" id="search-input"
+             placeholder="Rechercher par code SH (ex: 2009) ou libellé (ex: sucre, voiture, tabac)…"
+             aria-label="Recherche de produits">
+    </div>
+    <div class="search-stats">
+      <span><strong id="search-count">38 809</strong> produits disponibles</span>
+      <div class="filter-chips" id="filter-chips">
+        <span class="chip active" data-territory="all">Tous</span>
+        <span class="chip guadeloupe" data-territory="GUADELOUPE">🇫🇷 Guadeloupe</span>
+        <span class="chip martinique" data-territory="MARTINIQUE">🇫🇷 Martinique</span>
+        <span class="chip reunion" data-territory="REUNION">🇫🇷 Réunion</span>
+        <span class="chip guyane" data-territory="GUYANE">🇫🇷 Guyane</span>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table class="data-table" id="search-table">
+        <thead>
+          <tr>
+            <th style="width:120px;">Territoire</th>
+            <th style="width:130px;">Code SH</th>
+            <th>Libellé</th>
+            <th style="width:100px;">Taux OME</th>
+            <th style="width:100px;">Taux OMRE</th>
+            <th style="width:70px;">Annexe</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB SIMULATOR -->
+  <div class="tab-panel" id="tab-simulator">
+    <h2 class="section-title"><span class="icon">🧮</span>Simulateur d'octroi de mer</h2>
+    <div class="simulator">
+      <div class="sim-grid">
+        <div class="sim-field">
+          <label for="sim-search">Code SH ou produit</label>
+          <input type="text" id="sim-search" placeholder="Ex: 2203 (bières)">
+        </div>
+        <div class="sim-field">
+          <label for="sim-value">Valeur HT (€)</label>
+          <input type="number" id="sim-value" value="1000" min="0" step="100">
+        </div>
+        <div class="sim-field">
+          <label for="sim-qty">Quantité</label>
+          <input type="number" id="sim-qty" value="1" min="1">
+        </div>
+        <div class="sim-field">
+          <label for="sim-territory">Territoire</label>
+          <select id="sim-territory">
+            <option value="all">Tous les DROM</option>
+            <option value="GUADELOUPE">Guadeloupe</option>
+            <option value="MARTINIQUE">Martinique</option>
+            <option value="REUNION">Réunion</option>
+            <option value="GUYANE">Guyane</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-calc" id="sim-calc">🧮 Calculer l'octroi de mer</button>
+      <div class="sim-result" id="sim-result"></div>
+    </div>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <span class="drapeau"></span>
+  <strong>Dashboard Octroi de Mer DROM</strong> · Données officielles extraites des tarifs douaniers
+  <br>
+  <small style="opacity:0.7;">Guadeloupe · Martinique · Réunion · Guyane — 38 809 produits tarifaires analysés</small>
+</footer>
+
+<!-- Boutons flottants -->
+<div class="floating-actions">
+  <button class="action-btn csv" id="export-csv" title="Exporter en CSV" aria-label="Exporter en CSV">📥</button>
+  <button class="action-btn json" id="export-json" title="Exporter en JSON" aria-label="Exporter en JSON">📄</button>
+  <button class="action-btn png" id="export-png" title="Exporter le graphique en PNG" aria-label="Exporter en PNG">🖼️</button>
+  <button class="action-btn theme" id="theme-toggle" title="Thème clair/sombre" aria-label="Changer de thème">🌙</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const STATE = {
+  data: null,
+  searchResults: [],
+  currentFilter: 'all',
+  currentQuery: '',
+};
+
+const TERRITORIES = ['GUADELOUPE', 'MARTINIQUE', 'REUNION', 'GUYANE'];
+const COLORS = {
+  GUADELOUPE: '#0055A4',
+  MARTINIQUE: '#EF4135',
+  REUNION: '#FCD116',
+  GUYANE: '#009739',
+};
+const TERRITORY_FLAGS = {
+  GUADELOUPE: '🇫🇷',
+  MARTINIQUE: '🇫🇷',
+  REUNION: '🇫🇷',
+  GUYANE: '🇫🇷',
+};
+const TERRITORY_NAMES = {
+  GUADELOUPE: 'Guadeloupe',
+  MARTINIQUE: 'Martinique',
+  REUNION: 'La Réunion',
+  GUYANE: 'Guyane',
+};
+
+// ============================================================
+// UTILITAIRES
+// ============================================================
+const fmtN = (n, d = 0) => Number(n).toLocaleString('fr-FR', {
+  minimumFractionDigits: d, maximumFractionDigits: d
+});
+const fmtPct = (n, d = 2) => n === null || n === undefined ? '—' : n.toFixed(d) + '%';
+
+function tauxClass(t) {
+  if (t === null || t === undefined) return 'taux-0';
+  if (t === 0) return 'taux-0';
+  if (t < 5) return 'taux-bas';
+  if (t < 15) return 'taux-moyen';
+  if (t < 30) return 'taux-haut';
+  return 'taux-tres-haut';
+}
+
+function isDark() { return document.body.classList.contains('dark'); }
+function chartColors() {
+  return {
+    bg: isDark() ? '#161B22' : 'white',
+    grid: isDark() ? '#30363D' : '#F0F2F5',
+    text: isDark() ? '#E6EDF3' : '#1A2332',
+    muted: isDark() ? '#8B949E' : '#6C757D',
+  };
+}
+function baseLayout(extra = {}) {
+  const c = chartColors();
+  return Object.assign({
+    plot_bgcolor: c.bg,
+    paper_bgcolor: c.bg,
+    font: { family: 'inherit', size: 11, color: c.text },
+    margin: { t: 20, r: 20, b: 50, l: 60 },
+    xaxis: { gridcolor: c.grid, zerolinecolor: c.grid },
+    yaxis: { gridcolor: c.grid, zerolinecolor: c.grid },
+    legend: { orientation: 'h', y: -0.15 },
+  }, extra);
+}
+
+// ============================================================
+// CHARGEMENT
+// ============================================================
+async function loadData() {
+  try {
+    const res = await fetch('./data/dashboard_data.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    STATE.data = await res.json();
+    document.getElementById('loading').classList.add('hidden');
+    initDashboard();
+  } catch (err) {
+    document.getElementById('loading').innerHTML = `
+      <div style="color: #FFD700; text-align: center; padding: 2rem; max-width: 600px;">
+        <h2 style="margin-bottom: 1rem;">❌ Erreur de chargement</h2>
+        <p style="margin-bottom: 1rem;">${err.message}</p>
+        <p style="font-size: 0.9rem; line-height: 1.8;">
+          Lancez un serveur HTTP depuis le dossier du projet :<br>
+          <code style="background: rgba(255,255,255,0.2); padding: 0.4rem 0.8rem; border-radius: 6px; display: inline-block; margin-top: 0.5rem; font-family: monospace;">
+            python3 -m http.server 8000
+          </code><br>
+          <span style="opacity: 0.85;">Puis ouvrez :</span>
+          <a href="http://localhost:8000/" style="color: #FFD700; text-decoration: underline;">
+            http://localhost:8000/
+          </a>
+        </p>
+      </div>
+    `;
+  }
+}
+
+// ============================================================
+// HEADER STATS
+// ============================================================
+function renderHeaderStats() {
+  const stats = STATE.data.stats_par_territoire;
+  const total = STATE.data.total_produits;
+  const totalTaux = Object.values(stats).reduce((s, x) => s + x.nb_taux_ome, 0);
+
+  document.getElementById('header-stats').innerHTML = `
+    <div class="stat-item">
+      <div class="stat-value">${fmtN(total)}</div>
+      <div class="stat-label">Produits</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">${fmtN(totalTaux)}</div>
+      <div class="stat-label">Taux renseignés</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">${TERRITORIES.length}</div>
+      <div class="stat-label">DROM couverts</div>
+    </div>
+  `;
+}
+
+// ============================================================
+// KPIs
+// ============================================================
+function renderKPIs() {
+  const stats = STATE.data.stats_par_territoire;
+  const total = STATE.data.total_produits;
+
+  const tauxMoyen = TERRITORIES.reduce((s, t) => s + (stats[t]?.taux_ome_moyen || 0), 0) / TERRITORIES.length;
+  const tauxMax = Math.max(...TERRITORIES.map(t => stats[t]?.taux_ome_max || 0));
+  const nbChapitres = new Set(STATE.data.produits.map(p => p.chapitre)).size;
+
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">📦 Produits tarifaires</div>
+      <div class="kpi-value">${fmtN(total)}</div>
+      <div class="kpi-sub">Répartis sur 4 DROM</div>
+    </div>
+    <div class="kpi-card bleu-clair">
+      <div class="kpi-label">📈 Taux moyen (OME)</div>
+      <div class="kpi-value">${tauxMoyen.toFixed(2)}%</div>
+      <div class="kpi-sub">Tous territoires confondus</div>
+    </div>
+    <div class="kpi-card rouge">
+      <div class="kpi-label">⬆️ Taux maximum</div>
+      <div class="kpi-value">${tauxMax.toFixed(1)}%</div>
+      <div class="kpi-sub">Produits les plus protégés</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">📚 Chapitres SH</div>
+      <div class="kpi-value">${nbChapitres}</div>
+      <div class="kpi-sub">Chapitres de nomenclature</div>
+    </div>
+  `;
+}
+
+// ============================================================
+// CHARTS — OVERVIEW
+// ============================================================
+function renderNbProduits() {
+  const stats = STATE.data.stats_par_territoire;
+  const values = TERRITORIES.map(t => stats[t]?.nb_produits || 0);
+
+  Plotly.newPlot('chart-nb', [{
+    x: TERRITORIES.map(t => TERRITORY_NAMES[t]),
+    y: values, type: 'bar',
+    marker: {
+      color: TERRITORIES.map(t => COLORS[t]),
+      line: { color: 'white', width: 2 }
+    },
+    text: values.map(v => fmtN(v)),
+    textposition: 'outside',
+    textfont: { size: 12, weight: 700 },
+    hovertemplate: '<b>%{x}</b><br>%{y:,} produits<extra></extra>',
+  }], baseLayout({
+    yaxis: { title: 'Nombre de produits', gridcolor: chartColors().grid },
+  }), { displayModeBar: false, responsive: true });
+}
+
+function renderMoyenne() {
+  const stats = STATE.data.stats_par_territoire;
+  const values = TERRITORIES.map(t => stats[t]?.taux_ome_moyen || 0);
+
+  Plotly.newPlot('chart-moyenne', [{
+    x: TERRITORIES.map(t => TERRITORY_NAMES[t]),
+    y: values, type: 'bar',
+    marker: {
+      color: TERRITORIES.map(t => COLORS[t]),
+      line: { color: 'white', width: 2 }
+    },
+    text: values.map(v => v.toFixed(2) + '%'),
+    textposition: 'outside',
+    textfont: { size: 12, weight: 700 },
+    hovertemplate: '<b>%{x}</b><br>Taux moyen : %{y:.2f}%<extra></extra>',
+  }], baseLayout({
+    yaxis: { title: 'Taux moyen (%)', gridcolor: chartColors().grid },
+  }), { displayModeBar: false, responsive: true });
+}
+
+function renderDistribution() {
+  const produits = STATE.data.produits;
+  const traces = TERRITORIES.map(t => {
+    const taux = produits
+      .filter(p => p.territoire === t && p.taux_ome !== null && p.taux_ome > 0)
+      .map(p => p.taux_ome);
+    return {
+      x: taux, type: 'histogram',
+      name: TERRITORY_NAMES[t],
+      opacity: 0.65,
+      marker: { color: COLORS[t], line: { color: 'white', width: 0.5 } },
+      nbinsx: 40,
+      hovertemplate: '%{x}%<br>%{y} produits<extra></extra>',
+    };
+  });
+
+  Plotly.newPlot('chart-distribution', traces, baseLayout({
+    barmode: 'overlay',
+    xaxis: { title: 'Taux OME (%)', gridcolor: chartColors().grid },
+    yaxis: { title: 'Nombre de produits', gridcolor: chartColors().grid },
+  }), { displayModeBar: false, responsive: true });
+}
+
+function renderPie() {
+  const stats = STATE.data.stats_par_territoire;
+  const values = TERRITORIES.map(t => stats[t]?.nb_produits || 0);
+
+  Plotly.newPlot('chart-pie', [{
+    labels: TERRITORIES.map(t => TERRITORY_NAMES[t]),
+    values: values, type: 'pie', hole: 0.5,
+    marker: {
+      colors: TERRITORIES.map(t => COLORS[t]),
+      line: { color: 'white', width: 3 }
+    },
+    textinfo: 'label+percent',
+    textposition: 'outside',
+    hovertemplate: '<b>%{label}</b><br>%{value:,} produits<br>%{percent}<extra></extra>',
+  }], baseLayout({
+    showlegend: false,
+    margin: { t: 20, r: 20, b: 20, l: 20 },
+  }), { displayModeBar: false, responsive: true });
+}
+
+// ============================================================
+// CHARTS — COMPARISON
+// ============================================================
+function renderCompOME() {
+  const produits = STATE.data.produits;
+  const traces = TERRITORIES.map(t => {
+    const taux = produits
+      .filter(p => p.territoire === t && p.taux_ome !== null)
+      .map(p => p.taux_ome);
+    return {
+      y: taux, type: 'box',
+      name: TERRITORY_NAMES[t],
+      marker: { color: COLORS[t] },
+      boxmean: 'sd',
+      hovertemplate: '%{y:.2f}%<extra></extra>',
+    };
+  });
+
+  Plotly.newPlot('chart-comp-ome', traces, baseLayout({
+    yaxis: { title: 'Taux OME (%)', gridcolor: chartColors().grid },
+    showlegend: false,
+  }), { displayModeBar: false, responsive: true });
+}
+
+function renderCompOMRE() {
+  const produits = STATE.data.produits;
+  const traces = TERRITORIES.map(t => {
+    const taux = produits
+      .filter(p => p.territoire === t && p.taux_omre !== null)
+      .map(p => p.taux_omre);
+    return {
+      y: taux, type: 'box',
+      name: TERRITORY_NAMES[t],
+      marker: { color: COLORS[t] },
+      boxmean: 'sd',
+      hovertemplate: '%{y:.2f}%<extra></extra>',
+    };
+  });
+
+  Plotly.newPlot('chart-comp-omre', traces, baseLayout({
+    yaxis: { title: 'Taux OMRE (%)', gridcolor: chartColors().grid },
+    showlegend: false,
+  }), { displayModeBar: false, responsive: true });
+}
+
+function renderBoxplot() {
+  const produits = STATE.data.produits;
+  const traces = TERRITORIES.map(t => {
+    const taux = produits
+      .filter(p => p.territoire === t && p.taux_ome !== null)
+      .map(p => p.taux_ome);
+    return {
+      y: taux, type: 'violin',
+      name: TERRITORY_NAMES[t],
+      marker: { color: COLORS[t] },
+      box: { visible: true },
+      meanline: { visible: true },
+      points: false,
+      hovertemplate: '%{y:.2f}%<extra></extra>',
+    };
+  });
+
+  Plotly.newPlot('chart-boxplot', traces, baseLayout({
+    yaxis: { title: 'Taux OME (%) — distribution', gridcolor: chartColors().grid },
+  }), { displayModeBar: false, responsive: true });
+}
+
+// ============================================================
+// CHARTS — CHAPTERS
+// ============================================================
+function renderTopChapters() {
+  const produits = STATE.data.produits;
+  const byChap = {};
+  produits.forEach(p => {
+    const ch = p.chapitre || '00';
+    byChap[ch] = (byChap[ch] || 0) + 1;
+  });
+  const sorted = Object.entries(byChap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20).reverse();
+
+  Plotly.newPlot('chart-top-chapters', [{
+    x: sorted.map(d => d[1]),
+    y: sorted.map(d => 'Chapitre ' + d[0]),
+    type: 'bar', orientation: 'h',
+    marker: {
+      color: sorted.map(d => d[1]),
+      colorscale: [[0, '#00A3E0'], [0.5, '#0055A4'], [1, '#003366']],
+    },
+    text: sorted.map(d => fmtN(d[1])),
+    textposition: 'outside',
+    hovertemplate: '<b>%{y}</b><br>%{x:,} produits<extra></extra>',
+  }], baseLayout({
+    margin: { t: 20, r: 80, b: 40, l: 120 },
+    xaxis: { title: 'Nombre de produits', gridcolor: chartColors().grid },
+  }), { displayModeBar: false, responsive: true });
+}
+
+function renderChaptersTaux() {
+  const produits = STATE.data.produits;
+  const byChap = {};
+  produits.forEach(p => {
+    if (p.taux_ome === null) return;
+    const ch = p.chapitre || '00';
+    if (!byChap[ch]) byChap[ch] = [];
+    byChap[ch].push(p.taux_ome);
+  });
+  const sorted = Object.entries(byChap)
+    .map(([ch, arr]) => ({ ch, moy: arr.reduce((a, b) => a + b, 0) / arr.length, n: arr.length }))
+    .filter(d => d.n >= 5)
+    .sort((a, b) => b.moy - a.moy)
+    .slice(0, 20).reverse();
+
+  Plotly.newPlot('chart-chapters-taux', [{
+    x: sorted.map(d => d.moy),
+    y: sorted.map(d => 'Chap. ' + d.ch + ' (' + d.n + ')'),
+    type: 'bar', orientation: 'h',
+    marker: {
+      color: sorted.map(d => d.moy),
+      colorscale: [[0, '#28a745'], [0.5, '#ffc107'], [1, '#EF4135']],
+    },
+    text: sorted.map(d => d.moy.toFixed(1) + '%'),
+    textposition: 'outside',
+    hovertemplate: '<b>%{y}</b><br>Taux moyen : %{x:.2f}%<extra></extra>',
+  }], baseLayout({
+    margin: { t: 20, r: 80, b: 40, l: 140 },
+    xaxis: { title: 'Taux moyen (%)', gridcolor: chartColors().grid },
+  }), { displayModeBar: false, responsive: true });
+}
+
+// ============================================================
+// SEARCH
+// ============================================================
+function searchProduits(query, territory = 'all') {
+  if (!query || query.length < 2) {
+    if (territory === 'all') return [];
+    return STATE.data.produits.filter(p => p.territoire === territory).slice(0, 200);
+  }
+  const q = query.toUpperCase().trim();
+  return STATE.data.produits.filter(p => {
+    if (territory !== 'all' && p.territoire !== territory) return false;
+    return (p.code_nc && p.code_nc.toUpperCase().includes(q)) ||
+           (p.libelle && p.libelle.toUpperCase().includes(q));
+  }).slice(0, 300);
+}
+
+function renderSearchResults() {
+  const results = searchProduits(STATE.currentQuery, STATE.currentFilter);
+  STATE.searchResults = results;
+
+  document.getElementById('search-count').textContent = fmtN(
+    STATE.currentQuery.length < 2 && STATE.currentFilter === 'all'
+      ? STATE.data.total_produits
+      : results.length
+  );
+
+  const tbody = document.querySelector('#search-table tbody');
+  if (results.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:3rem; color:var(--texte-muted);">Aucun résultat</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = results.map(p => `
+    <tr>
+      <td><span class="territory-badge territory-${p.territoire}">${TERRITORY_FLAGS[p.territoire]} ${p.territoire}</span></td>
+      <td><code style="font-family:monospace; font-size:0.8rem;">${p.code_nc}</code></td>
+      <td>${(p.libelle || '').substring(0, 150)}${(p.libelle || '').length > 150 ? '…' : ''}</td>
+      <td><span class="taux-badge ${tauxClass(p.taux_ome)}">${fmtPct(p.taux_ome)}</span></td>
+      <td><span class="taux-badge ${tauxClass(p.taux_omre)}">${fmtPct(p.taux_omre)}</span></td>
+      <td>${p.annexe || '—'}</td>
+    </tr>
+  `).join('');
+}
+
+// ============================================================
+// SIMULATOR
+// ============================================================
+function runSimulator() {
+  const query = document.getElementById('sim-search').value.trim().toUpperCase();
+  const value = parseFloat(document.getElementById('sim-value').value) || 0;
+  const qty = parseInt(document.getElementById('sim-qty').value) || 1;
+  const territoryFilter = document.getElementById('sim-territory').value;
+
+  if (!query || query.length < 2) {
+    document.getElementById('sim-result').innerHTML =
+      '<div class="result-row" style="border-left-color:#ffc107;">Veuillez saisir un code SH ou un nom de produit (min. 2 caractères)</div>';
+    return;
+  }
+
+  let matches = STATE.data.produits.filter(p => {
+    if (territoryFilter !== 'all' && p.territoire !== territoryFilter) return false;
+    return (p.code_nc && p.code_nc.toUpperCase().includes(query)) ||
+           (p.libelle && p.libelle.toUpperCase().includes(query));
+  });
+
+  if (matches.length === 0) {
+    document.getElementById('sim-result').innerHTML =
+      '<div class="result-row" style="border-left-color:#EF4135;">Aucun produit trouvé pour cette recherche</div>';
+    return;
+  }
+
+  const valueHT = value * qty;
+  const results = matches.slice(0, 12);
+
+  const html = results.map(p => {
+    const taux = p.taux_ome || 0;
+    const montant = valueHT * taux / 100;
+    return `
+      <div class="result-row ${p.territoire}">
+        <div class="result-info">
+          <div class="result-territory">${TERRITORY_FLAGS[p.territoire]} ${TERRITORY_NAMES[p.territoire]}</div>
+          <div>
+            <span class="result-code">${p.code_nc}</span>
+            <span class="result-libelle">${(p.libelle || '').substring(0, 90)}${(p.libelle || '').length > 90 ? '…' : ''}</span>
+          </div>
+        </div>
+        <div class="result-taux">
+          <span class="value">${taux.toFixed(2)}%</span>
+          <span>taux OME</span>
+        </div>
+        <div class="result-montant">
+          <span class="value">${fmtN(montant, 2)} €</span>
+          <span class="label">octroi dû</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('sim-result').innerHTML = `
+    <div style="padding: 0.8rem 1rem; background: rgba(0,85,164,0.08); border-radius: 10px; font-size: 0.9rem; margin-bottom: 0.5rem;">
+      <strong>${results.length}</strong> résultat(s) — Valeur HT : <strong>${fmtN(valueHT, 2)} €</strong> (${fmtN(value, 2)} € × ${qty})
+    </div>
+    ${html}
+  `;
+}
+
+// ============================================================
+// EXPORT
+// ============================================================
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast ' + type + ' show';
+  setTimeout(() => toast.classList.remove('show'), 2800);
+}
+
+function downloadBlob(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+}
+
+function getExportData() {
+  return STATE.searchResults.length > 0
+    ? STATE.searchResults
+    : STATE.data.produits;
+}
+
+function exportCSV() {
+  const results = getExportData();
+  if (results.length === 0) {
+    showToast('⚠️ Aucune donnée à exporter', 'warning');
+    return;
+  }
+
+  const headers = ['Territoire', 'Code SH', 'Libelle', 'Taux OME (%)', 'Taux OMRE (%)', 'Chapitre', 'Annexe'];
+  const escape = (v) => {
+    const s = String(v === null || v === undefined ? '' : v);
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? '"' + s.replace(/"/g, '""') + '"'
+      : s;
+  };
+
+  const rows = results.map(p => [
+    p.territoire || '',
+    p.code_nc || '',
+    p.libelle || '',
+    p.taux_ome !== null && p.taux_ome !== undefined ? p.taux_ome.toFixed(2) : '',
+    p.taux_omre !== null && p.taux_omre !== undefined ? p.taux_omre.toFixed(2) : '',
+    p.chapitre || '',
+    p.annexe || '',
+  ].map(escape).join(','));
+
+  const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
+  const date = new Date().toISOString().slice(0, 10);
+  downloadBlob(csv, `octroi_mer_${results.length}_produits_${date}.csv`, 'text/csv;charset=utf-8;');
+  showToast(`✅ ${results.length} produits exportés en CSV`);
+}
+
+function exportJSON() {
+  const results = getExportData();
+  if (results.length === 0) {
+    showToast('⚠️ Aucune donnée à exporter', 'warning');
+    return;
+  }
+
+  const payload = {
+    generated_at: new Date().toISOString(),
+    source: 'Dashboard Octroi de Mer DROM',
+    nb_produits: results.length,
+    filtres: {
+      territoire: STATE.currentFilter,
+      recherche: STATE.currentQuery,
+    },
+    produits: results,
+  };
+
+  const json = JSON.stringify(payload, null, 2);
+  const date = new Date().toISOString().slice(0, 10);
+  downloadBlob(json, `octroi_mer_${results.length}_produits_${date}.json`, 'application/json');
+  showToast(`✅ ${results.length} produits exportés en JSON`);
+}
+
+function exportPNG() {
+  const activePanel = document.querySelector('.tab-panel.active');
+  if (!activePanel) {
+    showToast('⚠️ Aucun onglet actif', 'warning');
+    return;
+  }
+  const charts = activePanel.querySelectorAll('.chart');
+  if (charts.length === 0) {
+    showToast('⚠️ Aucun graphique sur cet onglet', 'warning');
+    return;
+  }
+  const chartId = charts[0].id;
+  const date = new Date().toISOString().slice(0, 10);
+  Plotly.downloadImage(chartId, {
+    format: 'png', width: 1600, height: 900,
+    filename: `octroi_mer_${chartId}_${date}`,
+  });
+  showToast('✅ Graphique exporté en PNG');
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+    });
+  });
+}
+
+// ============================================================
+// FILTER CHIPS
+// ============================================================
+function initFilterChips() {
+  document.querySelectorAll('#filter-chips .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#filter-chips .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      STATE.currentFilter = chip.dataset.territory;
+      renderSearchResults();
+    });
+  });
+}
+
+// ============================================================
+// THEME
+// ============================================================
+function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark' || (!saved && matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.body.classList.add('dark');
+    document.getElementById('theme-toggle').textContent = '☀️';
+  }
+}
+
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const dark = isDark();
+  document.getElementById('theme-toggle').textContent = dark ? '☀️' : '🌙';
+  localStorage.setItem('theme', dark ? 'dark' : 'light');
+  renderAll();
+}
+
+// ============================================================
+// RENDER ALL
+// ============================================================
+function renderAll() {
+  renderHeaderStats();
+  renderKPIs();
+  renderNbProduits();
+  renderMoyenne();
+  renderDistribution();
+  renderPie();
+  renderCompOME();
+  renderCompOMRE();
+  renderBoxplot();
+  renderTopChapters();
+  renderChaptersTaux();
+  renderSearchResults();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function initDashboard() {
+  initTabs();
+  initFilterChips();
+  renderAll();
+
+  // Recherche avec debounce
+  let timer;
+  document.getElementById('search-input').addEventListener('input', e => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      STATE.currentQuery = e.target.value;
+      renderSearchResults();
+    }, 250);
+  });
+
+  // Simulateur
+  document.getElementById('sim-calc').addEventListener('click', runSimulator);
+  document.getElementById('sim-search').addEventListener('keydown', e => {
+    if (e.key === 'Enter') runSimulator();
+  });
+
+  // Exports
+  document.getElementById('export-csv').addEventListener('click', exportCSV);
+  document.getElementById('export-json').addEventListener('click', exportJSON);
+  document.getElementById('export-png').addEventListener('click', exportPNG);
+
+  // Thème
+  initTheme();
+  document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+}
+
+loadData();
+</script>
+</body>
+</html>
