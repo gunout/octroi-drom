@@ -144,18 +144,21 @@ Chaque produit possède les champs suivants :
 - [ ] Comparateur temporel
 
 ---
-
+<div align="center">
 ## 📄 Licence
 
 [MIT](LICENSE) © 2026 [gunout](https://github.com/gunout)
+</div>
 
 ---
+
+<div align="center">
 
 **🇫🇷 Fait avec ❤️ pour les DROM 🇫🇷**
 
 ⭐ N'hésitez pas à mettre une étoile si ce projet vous est utile !
 
-
+</div>
 ---
 
 <div align="center">
