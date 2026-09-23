@@ -145,7 +145,7 @@ Chaque produit possède les champs suivants :
 
 ---
 <div align="center">
-## 📄 Licence
+ 📄 Licence
 
 [MIT](LICENSE) © 2026 [gunout](https://github.com/gunout)
 </div>
